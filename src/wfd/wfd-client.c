@@ -34,7 +34,11 @@ struct _WfdClient
   WfdParams         *params;
 
   WfdMediaQuirks     media_quirks;
+  gint64             last_idr_time;
 };
+
+/* Sinks on a lossy link request IDRs back to back; each IDR adds load. */
+#define IDR_MIN_INTERVAL_US G_USEC_PER_SEC
 
 G_DEFINE_TYPE (WfdClient, wfd_client, GST_TYPE_RTSP_CLIENT)
 
@@ -112,6 +116,38 @@ compare_resolutions (gconstpointer a, gconstpointer b)
   return a_weight - b_weight;
 }
 
+/* NVENC produces High profile well; other encoders keep Baseline. */
+static WfdH264ProfileFlags
+preferred_h264_profile (void)
+{
+  g_autoptr(GstElementFactory) nvenc = gst_element_factory_find ("nvh264enc");
+
+  return nvenc ? WFD_H264_PROFILE_HIGH : WFD_H264_PROFILE_BASE;
+}
+
+/* 60 Hz if the sink advertises progressive 1080p60, else 30 Hz.
+ * GND_WFD_FPS=30 forces 30 Hz. */
+static gint
+select_fullhd_refresh_rate (WfdVideoCodec *codec)
+{
+  g_autoptr(GList) resolutions = NULL;
+  GList *l;
+
+  if (codec == NULL || g_strcmp0 (g_getenv ("GND_WFD_FPS"), "30") == 0)
+    return 30;
+
+  resolutions = wfd_video_codec_get_resolutions (codec);
+  for (l = resolutions; l != NULL; l = l->next)
+    {
+      WfdResolution *r = l->data;
+
+      if (r->width == 1920 && r->height == 1080 && r->refresh_rate == 60 && !r->interlaced)
+        return 60;
+    }
+
+  return 30;
+}
+
 void
 wfd_client_select_codec_and_resolution (WfdClient *self, WfdH264ProfileFlags profile)
 {
@@ -161,7 +197,7 @@ wfd_client_select_codec_and_resolution (WfdClient *self, WfdH264ProfileFlags pro
   self->params->selected_resolution = wfd_resolution_new ();
   self->params->selected_resolution->width = 1920;
   self->params->selected_resolution->height = 1080;
-  self->params->selected_resolution->refresh_rate = 30;
+  self->params->selected_resolution->refresh_rate = select_fullhd_refresh_rate (codec);
   self->params->selected_resolution->interlaced = FALSE;
 #if 0
 }
@@ -319,8 +355,7 @@ wfd_client_handle_response (GstRTSPClient * client, GstRTSPContext *ctx)
       g_debug ("WfdClient: GET_PARAMS done");
       wfd_params_from_sink (self->params, ctx->response->body, ctx->response->body_size);
 
-      /* XXX: Pick the better profile if we have an encoder that supports it! */
-      wfd_client_select_codec_and_resolution (self, WFD_H264_PROFILE_BASE);
+      wfd_client_select_codec_and_resolution (self, preferred_h264_profile ());
 
       g_idle_add (wfd_client_idle_set_params, g_object_ref (self));
       break;
@@ -477,6 +512,8 @@ wfd_client_params_set (GstRTSPClient *client, GstRTSPContext *ctx)
           /* Force a key unit event. */
           if (self->media_quirks & WFD_QUIRK_NO_IDR)
             g_debug ("Cannot force key frame as the pipeline doesn't support it!");
+          else if (g_get_monotonic_time () - self->last_idr_time < IDR_MIN_INTERVAL_US)
+            g_debug ("Ignoring key frame request, last one was too recent");
           else if (self->media)
             {
               GstRTSPStream *stream;
@@ -490,6 +527,7 @@ wfd_client_params_set (GstRTSPClient *client, GstRTSPContext *ctx)
               srcpad = gst_rtsp_stream_get_srcpad (stream);
 
               g_debug ("Forcing a keyframe!");
+              self->last_idr_time = g_get_monotonic_time ();
               event = gst_video_event_new_upstream_force_key_unit (GST_CLOCK_TIME_NONE, TRUE, 0);
               gst_pad_send_event (srcpad, g_steal_pointer (&event));
             }

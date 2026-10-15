@@ -7,6 +7,7 @@ static const gchar * wfd_gst_elements[ELEMENT_NONE + 1] = {
   [ELEMENT_X264] = "x264enc",
   [ELEMENT_VAH264] = "vah264enc",
   [ELEMENT_VAAPIH264] = "vaapih264enc",
+  [ELEMENT_NVH264] = "nvh264enc",
   [ELEMENT_VIDEO_NONE] = NULL,
 
   [ELEMENT_AAC_FDK] = "fdkaacenc",
@@ -147,7 +148,10 @@ wfd_media_factory_create_video_element (WfdMediaFactory *self, GstBin *bin)
   scale = gst_element_factory_make ("videoscale", "wfd-scale");
   g_object_set (scale,
                 "qos", TRUE,
+                "n-threads", (guint) 4,
                 NULL);
+  /* lanczos keeps text sharp when downscaling the desktop */
+  gst_util_set_object_arg (G_OBJECT (scale), "method", "lanczos");
   success &= gst_bin_add (bin, scale);
 
   caps = gst_caps_new_simple ("video/x-raw",
@@ -267,6 +271,20 @@ wfd_media_factory_create_video_element (WfdMediaFactory *self, GstBin *bin)
         success &= gst_bin_add (bin, encoder);
         break;
       }
+
+    case ELEMENT_NVH264:
+      encoder = gst_element_factory_make ("nvh264enc", "wfd-encoder");
+      encoder_elem = encoder;
+      success &= gst_bin_add (bin, encoder);
+      g_object_set (encoder,
+                    "bframes", (guint) 0,
+                    "zerolatency", TRUE,
+                    "repeat-sequence-header", TRUE,
+                    NULL);
+      gst_util_set_object_arg (G_OBJECT (encoder), "preset", "p4");
+      gst_util_set_object_arg (G_OBJECT (encoder), "tune", "low-latency");
+      gst_util_set_object_arg (G_OBJECT (encoder), "rc-mode", "cbr");
+      break;
 
     default:
       g_assert_not_reached ();
@@ -526,17 +544,26 @@ wfd_configure_media_element (GstBin *bin, WfdParams *params)
   WfdH264ProfileFlags profile;
   guint gop_size = resolution->refresh_rate;
   guint bitrate_kbit = wfd_video_codec_get_max_bitrate_kbit (codec);
-
-  /* Limit initial video bitrate to 512kBit/s to ensure we don't
-   * saturate the wifi link.
-   * This is a rather bad method, but it kind of works. */
-  bitrate_kbit = MIN (bitrate_kbit, 512 * 8);
+  guint bitrate_cap_kbit;
+  const gchar *bitrate_env;
 
   if (resolution->interlaced)
     g_warning ("Resolution should never be set to interlaced as that is not supported with all codecs.");
 
   encoder = gst_bin_get_by_name (bin, "wfd-encoder");
   encoder_impl = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (encoder), "wfd-encoder-impl"));
+
+  /* Cap the bitrate so we don't saturate the wifi link.
+   * GND_WFD_BITRATE_KBIT overrides the default cap. */
+  bitrate_cap_kbit = encoder_impl == ELEMENT_NVH264 ? 8000 : 512 * 8;
+  bitrate_env = g_getenv ("GND_WFD_BITRATE_KBIT");
+  if (bitrate_env && g_ascii_strtoull (bitrate_env, NULL, 10) > 0)
+    bitrate_cap_kbit = g_ascii_strtoull (bitrate_env, NULL, 10);
+  bitrate_kbit = MIN (bitrate_kbit, bitrate_cap_kbit);
+  g_message ("WfdMediaFactory: encoder %s, %dx%d@%d, bitrate %u kbit/s",
+             wfd_gst_elements[encoder_impl],
+             resolution->width, resolution->height, resolution->refresh_rate,
+             bitrate_kbit);
 
   if (encoder_impl == ELEMENT_VAAPIH264)
     quirks = WFD_QUIRK_NO_IDR;
@@ -650,6 +677,20 @@ wfd_configure_media_element (GstBin *bin, WfdParams *params)
       g_object_set (encoder,
                     "keyframe-period", (guint) gop_size,
                     "bitrate",  bitrate_kbit,
+                    NULL);
+      break;
+
+    case ELEMENT_NVH264:
+      if (codec->profile == WFD_H264_PROFILE_HIGH)
+        profile = WFD_H264_PROFILE_HIGH;
+      else
+        profile = WFD_H264_PROFILE_BASE;
+
+      /* VBV of two frames keeps IDR frames from bursting on the wifi link */
+      g_object_set (encoder,
+                    "gop-size", (gint) gop_size,
+                    "bitrate", bitrate_kbit,
+                    "vbv-buffer-size", bitrate_kbit * 2 / resolution->refresh_rate,
                     NULL);
       break;
 
