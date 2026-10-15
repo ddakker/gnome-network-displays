@@ -1,3 +1,25 @@
+> **이 저장소는 GNOME Network Displays 의 개인 수정판(ddakker Version)입니다.**
+> GNOME 프로젝트의 공식 배포판이 아닙니다.
+>
+> - 원본: https://gitlab.gnome.org/GNOME/gnome-network-displays
+> - 기준 버전: `0.99.0` 태그 (`upstream` 원격)
+> - 수정일: 2026-10-15
+> - 라이선스: 원본과 같은 GPL-3.0-or-later ([COPYING](COPYING)), 아이콘은 CC-BY-SA-4.0.
+>   원본 저작권은 원저작자에게 있습니다.
+>
+> 수정 내용 (Wi-Fi Display / Miracast 송출)
+>
+> - NVIDIA 하드웨어 인코더 `nvh264enc` 를 1순위로 사용
+> - NVENC 기본 비트레이트 8Mbps, `GND_WFD_BITRATE_KBIT` 환경변수로 조정
+> - 키프레임 크기 제한(VBV 2프레임), 싱크의 키프레임 재요청은 1초에 한 번만 처리
+> - 인코더가 지원하면 High 프로파일, 싱크가 지원하면 1080p60 (`GND_WFD_FPS=30` 으로 고정)
+> - 화면 축소를 lanczos 로 변경
+> - 앱 이름·창 제목에 `(ddakker Version)` 표시
+>
+> 변경 상세는 `git diff 0.99.0` 으로 확인할 수 있습니다.
+
+---
+
 This is an experimental implementation of Wi-Fi Display (aka Miracast).
 
 The application will stream the selected monitor if the mutter screencast
