@@ -644,10 +644,10 @@ on_meta_provider_has_provider_changed_cb (NdWindow *self, GParamSpec *pspec, NdM
                                     has_providers ? "has-providers" : "no-providers");
 }
 
-/* Values match the item order of each row in nd-window.ui; 0 is automatic */
-static const guint bitrate_values[] = { 0, 4000, 6000, 8000, 10000, 12000, 15000, 20000 };
+/* Values match the item order of each row in nd-window.ui; 0 is the default */
+static const guint bitrate_values[] = { 4000, 6000, 0, 10000, 12000, 15000, 20000 };
 static const guint encoder_values[] = { 0, WFD_SETTINGS_ENCODER_SOFTWARE };
-static const guint fps_values[] = { 0, 30 };
+static const guint fps_values[] = { 0, 60 };
 static const guint profile_values[] = { 0, WFD_SETTINGS_H264_PROFILE_BASELINE };
 
 typedef struct
@@ -675,6 +675,11 @@ setting_row_bind (AdwComboRow *row, const gchar *key, const guint *values, guint
   setting->key = key;
   setting->values = values;
   setting->n_values = n_values;
+
+  /* Select the default first so an unknown stored value falls back to it */
+  for (guint i = 0; i < n_values; i++)
+    if (values[i] == 0)
+      adw_combo_row_set_selected (row, i);
 
   for (guint i = 0; i < n_values; i++)
     if (values[i] == current)

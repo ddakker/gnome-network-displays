@@ -131,17 +131,22 @@ preferred_h264_profile (void)
   return nvenc ? WFD_H264_PROFILE_HIGH : WFD_H264_PROFILE_BASE;
 }
 
-/* 60 Hz if the sink advertises progressive 1080p60, else 30 Hz.
- * GND_WFD_FPS=30 or the max-fps setting forces 30 Hz. */
+/* 30 Hz by default. 60 Hz when GND_WFD_FPS=60 or the max-fps setting asks
+ * for it and the sink advertises progressive 1080p60. */
 static gint
 select_fullhd_refresh_rate (WfdVideoCodec *codec)
 {
   g_autoptr(GList) resolutions = NULL;
+  const gchar *fps_env = g_getenv ("GND_WFD_FPS");
+  gboolean want_60;
   GList *l;
 
-  if (codec == NULL ||
-      g_strcmp0 (g_getenv ("GND_WFD_FPS"), "30") == 0 ||
-      wfd_settings_get (WFD_SETTINGS_MAX_FPS) == 30)
+  if (fps_env)
+    want_60 = g_str_equal (fps_env, "60");
+  else
+    want_60 = wfd_settings_get (WFD_SETTINGS_MAX_FPS) == 60;
+
+  if (codec == NULL || !want_60)
     return 30;
 
   resolutions = wfd_video_codec_get_resolutions (codec);

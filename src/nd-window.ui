@@ -94,10 +94,9 @@
                                                     <property name="model">
                                                       <object class="GtkStringList">
                                                         <items>
-                                                          <item translatable="yes">Automatic</item>
                                                           <item>4 Mbit/s</item>
                                                           <item>6 Mbit/s</item>
-                                                          <item>8 Mbit/s</item>
+                                                          <item translatable="yes">8 Mbit/s (Default)</item>
                                                           <item>10 Mbit/s</item>
                                                           <item>12 Mbit/s</item>
                                                           <item>15 Mbit/s</item>
@@ -114,7 +113,7 @@
                                                     <property name="model">
                                                       <object class="GtkStringList">
                                                         <items>
-                                                          <item translatable="yes">Automatic</item>
+                                                          <item translatable="yes">NVENC (Default)</item>
                                                           <item translatable="yes">Software (CPU)</item>
                                                         </items>
                                                       </object>
@@ -124,12 +123,12 @@
                                                 <child>
                                                   <object class="AdwComboRow" id="fps_row">
                                                     <property name="title" translatable="yes">Frame Rate</property>
-                                                    <property name="subtitle" translatable="yes">Automatic uses 60 fps if the display supports it</property>
+                                                    <property name="subtitle" translatable="yes">60 fps is used only if the display supports it</property>
                                                     <property name="model">
                                                       <object class="GtkStringList">
                                                         <items>
-                                                          <item translatable="yes">Automatic</item>
-                                                          <item>30 fps</item>
+                                                          <item translatable="yes">30 fps (Default)</item>
+                                                          <item>60 fps</item>
                                                         </items>
                                                       </object>
                                                     </property>
@@ -138,11 +137,11 @@
                                                 <child>
                                                   <object class="AdwComboRow" id="profile_row">
                                                     <property name="title" translatable="yes">H.264 Profile</property>
-                                                    <property name="subtitle" translatable="yes">Use Baseline if the display shows no picture</property>
+                                                    <property name="subtitle" translatable="yes">Baseline if the display does not support High</property>
                                                     <property name="model">
                                                       <object class="GtkStringList">
                                                         <items>
-                                                          <item translatable="yes">Automatic</item>
+                                                          <item translatable="yes">High (Default)</item>
                                                           <item>Baseline</item>
                                                         </items>
                                                       </object>

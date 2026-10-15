@@ -558,7 +558,7 @@ wfd_configure_media_element (GstBin *bin, WfdParams *params)
    * Priority: GND_WFD_BITRATE_KBIT, then the UI setting, then the default. */
   bitrate_cap_kbit = wfd_settings_get (WFD_SETTINGS_BITRATE_KBIT);
   if (bitrate_cap_kbit == 0)
-    bitrate_cap_kbit = encoder_impl == ELEMENT_NVH264 ? 8000 : 512 * 8;
+    bitrate_cap_kbit = 8000;
   bitrate_env = g_getenv ("GND_WFD_BITRATE_KBIT");
   if (bitrate_env && g_ascii_strtoull (bitrate_env, NULL, 10) > 0)
     bitrate_cap_kbit = g_ascii_strtoull (bitrate_env, NULL, 10);
