@@ -5,6 +5,7 @@
 #include "wfd-media-factory.h"
 #include "wfd-media.h"
 #include "wfd-params.h"
+#include "wfd-settings.h"
 
 typedef enum {
   INIT_STATE_M0_INVALID = 0,
@@ -120,20 +121,27 @@ compare_resolutions (gconstpointer a, gconstpointer b)
 static WfdH264ProfileFlags
 preferred_h264_profile (void)
 {
-  g_autoptr(GstElementFactory) nvenc = gst_element_factory_find ("nvh264enc");
+  g_autoptr(GstElementFactory) nvenc = NULL;
 
+  if (wfd_settings_get (WFD_SETTINGS_H264_PROFILE) == WFD_SETTINGS_H264_PROFILE_BASELINE ||
+      wfd_settings_get (WFD_SETTINGS_ENCODER) == WFD_SETTINGS_ENCODER_SOFTWARE)
+    return WFD_H264_PROFILE_BASE;
+
+  nvenc = gst_element_factory_find ("nvh264enc");
   return nvenc ? WFD_H264_PROFILE_HIGH : WFD_H264_PROFILE_BASE;
 }
 
 /* 60 Hz if the sink advertises progressive 1080p60, else 30 Hz.
- * GND_WFD_FPS=30 forces 30 Hz. */
+ * GND_WFD_FPS=30 or the max-fps setting forces 30 Hz. */
 static gint
 select_fullhd_refresh_rate (WfdVideoCodec *codec)
 {
   g_autoptr(GList) resolutions = NULL;
   GList *l;
 
-  if (codec == NULL || g_strcmp0 (g_getenv ("GND_WFD_FPS"), "30") == 0)
+  if (codec == NULL ||
+      g_strcmp0 (g_getenv ("GND_WFD_FPS"), "30") == 0 ||
+      wfd_settings_get (WFD_SETTINGS_MAX_FPS) == 30)
     return 30;
 
   resolutions = wfd_video_codec_get_resolutions (codec);

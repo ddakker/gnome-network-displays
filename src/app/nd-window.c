@@ -29,6 +29,7 @@
 #include "nd-sink-list-model.h"
 #include "nd-sink-row.h"
 #include "nd-window.h"
+#include "wfd/wfd-settings.h"
 
 #ifdef HAVE_AVAHI
 #include <avahi-gobject/ga-client.h>
@@ -66,6 +67,10 @@ struct _NdWindow
 
   GtkListBox      *find_sink_list;
   NdSinkListModel *find_sink_list_model;
+  AdwComboRow     *bitrate_row;
+  AdwComboRow     *encoder_row;
+  AdwComboRow     *fps_row;
+  AdwComboRow     *profile_row;
 
   GtkListBox      *connect_sink_list;
   GListStore      *connect_sink_list_model;
@@ -579,6 +584,10 @@ gnome_nd_window_class_init (NdWindowClass *klass)
   gtk_widget_class_bind_template_child (widget_class, NdWindow, has_providers_stack);
   gtk_widget_class_bind_template_child (widget_class, NdWindow, step_stack);
   gtk_widget_class_bind_template_child (widget_class, NdWindow, find_sink_list);
+  gtk_widget_class_bind_template_child (widget_class, NdWindow, bitrate_row);
+  gtk_widget_class_bind_template_child (widget_class, NdWindow, encoder_row);
+  gtk_widget_class_bind_template_child (widget_class, NdWindow, fps_row);
+  gtk_widget_class_bind_template_child (widget_class, NdWindow, profile_row);
   gtk_widget_class_bind_template_child (widget_class, NdWindow, connect_sink_list);
   gtk_widget_class_bind_template_child (widget_class, NdWindow, connect_state_label);
   gtk_widget_class_bind_template_child (widget_class, NdWindow, connect_cancel);
@@ -635,6 +644,47 @@ on_meta_provider_has_provider_changed_cb (NdWindow *self, GParamSpec *pspec, NdM
                                     has_providers ? "has-providers" : "no-providers");
 }
 
+/* Values match the item order of each row in nd-window.ui; 0 is automatic */
+static const guint bitrate_values[] = { 0, 4000, 6000, 8000, 10000, 12000, 15000, 20000 };
+static const guint encoder_values[] = { 0, WFD_SETTINGS_ENCODER_SOFTWARE };
+static const guint fps_values[] = { 0, 30 };
+static const guint profile_values[] = { 0, WFD_SETTINGS_H264_PROFILE_BASELINE };
+
+typedef struct
+{
+  const gchar *key;
+  const guint *values;
+  guint        n_values;
+} SettingRow;
+
+static void
+setting_row_selected_cb (AdwComboRow *row, GParamSpec *pspec, const SettingRow *setting)
+{
+  guint selected = adw_combo_row_get_selected (row);
+
+  if (selected < setting->n_values)
+    wfd_settings_set (setting->key, setting->values[selected]);
+}
+
+static void
+setting_row_bind (AdwComboRow *row, const gchar *key, const guint *values, guint n_values)
+{
+  SettingRow *setting = g_new0 (SettingRow, 1);
+  guint current = wfd_settings_get (key);
+
+  setting->key = key;
+  setting->values = values;
+  setting->n_values = n_values;
+
+  for (guint i = 0; i < n_values; i++)
+    if (values[i] == current)
+      adw_combo_row_set_selected (row, i);
+
+  g_signal_connect_data (row, "notify::selected",
+                         G_CALLBACK (setting_row_selected_cb), setting,
+                         (GClosureNotify) g_free, 0);
+}
+
 static void
 gnome_nd_window_init (NdWindow *self)
 {
@@ -644,6 +694,15 @@ gnome_nd_window_init (NdWindow *self)
   g_debug ("GNOME Network Displays v%s started", PACKAGE_VERSION);
 
   gtk_widget_init_template (GTK_WIDGET (self));
+
+  setting_row_bind (self->bitrate_row, WFD_SETTINGS_BITRATE_KBIT,
+                    bitrate_values, G_N_ELEMENTS (bitrate_values));
+  setting_row_bind (self->encoder_row, WFD_SETTINGS_ENCODER,
+                    encoder_values, G_N_ELEMENTS (encoder_values));
+  setting_row_bind (self->fps_row, WFD_SETTINGS_MAX_FPS,
+                    fps_values, G_N_ELEMENTS (fps_values));
+  setting_row_bind (self->profile_row, WFD_SETTINGS_H264_PROFILE,
+                    profile_values, G_N_ELEMENTS (profile_values));
 
   self->meta_provider = nd_meta_provider_new ();
   g_signal_connect_object (self->meta_provider,

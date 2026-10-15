@@ -10,10 +10,12 @@
 > 수정 내용 (Wi-Fi Display / Miracast 송출)
 >
 > - NVIDIA 하드웨어 인코더 `nvh264enc` 를 1순위로 사용
-> - NVENC 기본 비트레이트 8Mbps, `GND_WFD_BITRATE_KBIT` 환경변수로 조정
+> - NVENC 기본 비트레이트 8Mbps. 화면의 Video Bitrate 또는 `GND_WFD_BITRATE_KBIT` 환경변수로 조정
 > - 키프레임 크기 제한(VBV 2프레임), 싱크의 키프레임 재요청은 1초에 한 번만 처리
 > - 인코더가 지원하면 High 프로파일, 싱크가 지원하면 1080p60 (`GND_WFD_FPS=30` 으로 고정)
 > - 화면 축소를 lanczos 로 변경
+> - TV 목록 아래에 비트레이트·인코더·프레임레이트·H.264 프로파일 설정 추가
+>   (`~/.config/gnome-network-displays/settings.ini` 에 저장)
 > - 앱 이름·창 제목에 `(ddakker Version)` 표시
 >
 > 변경 상세는 `git diff 0.99.0` 으로 확인할 수 있습니다.

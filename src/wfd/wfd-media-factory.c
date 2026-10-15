@@ -1,6 +1,7 @@
 #include "gnome-network-displays-config.h"
 #include "wfd-media-factory.h"
 #include "wfd-media.h"
+#include "wfd-settings.h"
 
 static const gchar * wfd_gst_elements[ELEMENT_NONE + 1] = {
   [ELEMENT_OPENH264] = "openh264enc",
@@ -554,16 +555,19 @@ wfd_configure_media_element (GstBin *bin, WfdParams *params)
   encoder_impl = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (encoder), "wfd-encoder-impl"));
 
   /* Cap the bitrate so we don't saturate the wifi link.
-   * GND_WFD_BITRATE_KBIT overrides the default cap. */
-  bitrate_cap_kbit = encoder_impl == ELEMENT_NVH264 ? 8000 : 512 * 8;
+   * Priority: GND_WFD_BITRATE_KBIT, then the UI setting, then the default. */
+  bitrate_cap_kbit = wfd_settings_get (WFD_SETTINGS_BITRATE_KBIT);
+  if (bitrate_cap_kbit == 0)
+    bitrate_cap_kbit = encoder_impl == ELEMENT_NVH264 ? 8000 : 512 * 8;
   bitrate_env = g_getenv ("GND_WFD_BITRATE_KBIT");
   if (bitrate_env && g_ascii_strtoull (bitrate_env, NULL, 10) > 0)
     bitrate_cap_kbit = g_ascii_strtoull (bitrate_env, NULL, 10);
   bitrate_kbit = MIN (bitrate_kbit, bitrate_cap_kbit);
-  g_message ("WfdMediaFactory: encoder %s, %dx%d@%d, bitrate %u kbit/s",
+  g_message ("WfdMediaFactory: encoder %s, %dx%d@%d, bitrate %u kbit/s, sink profile %s",
              wfd_gst_elements[encoder_impl],
              resolution->width, resolution->height, resolution->refresh_rate,
-             bitrate_kbit);
+             bitrate_kbit,
+             codec->profile == WFD_H264_PROFILE_HIGH ? "high" : "baseline");
 
   if (encoder_impl == ELEMENT_VAAPIH264)
     quirks = WFD_QUIRK_NO_IDR;
@@ -844,6 +848,10 @@ wfd_gst_media_profile_present (WfdMediaProfile media_profile)
 
   for (factory_profile = 0; factory_profile < (sizeof (wfd_media_factory_profiles) / sizeof (wfd_media_factory_profiles[0])); ++factory_profile)
     {
+      if (wfd_media_factory_profiles[factory_profile].video_encoder == ELEMENT_NVH264 &&
+          wfd_settings_get (WFD_SETTINGS_ENCODER) == WFD_SETTINGS_ENCODER_SOFTWARE)
+        continue;
+
       if (wfd_media_factory_profiles[factory_profile].media_profile == media_profile &&
           wfd_gst_element_present (wfd_media_factory_profiles[factory_profile].video_encoder) &&
           wfd_gst_element_present (wfd_media_factory_profiles[factory_profile].audio_encoder) &&
